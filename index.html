@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f4f7fb">
+<title>Mapa de Sala</title>
+<style>
+:root{
+  --bg:#f3f6fa; --surface:#fff; --surface2:#f8fafc; --surface3:#eef3f8;
+  --text:#182235; --muted:#7b8799; --line:#e1e7ef; --accent:#5276e8;
+  --accentSoft:#edf2ff; --danger:#d94b61; --dangerSoft:#fff0f3;
+  --warn:#c67a08; --warnSoft:#fff6e5; --wc:#5c61d4; --wcSoft:#efefff;
+  --shadow:0 18px 55px rgba(31,47,79,.10); --seatShadow:0 8px 24px rgba(35,50,79,.095);
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid rgba(82,118,232,.22);outline-offset:2px}
+.app{height:100dvh;display:flex;flex-direction:column;background:linear-gradient(180deg,#fbfcfe 0,#f4f7fb 48%,#f1f4f8 100%)}
+.header{flex:0 0 auto;padding:calc(9px + env(safe-area-inset-top)) 11px 9px;background:rgba(250,252,254,.90);backdrop-filter:blur(18px);border-bottom:1px solid rgba(224,230,239,.92);z-index:30;max-height:142px;overflow:hidden;transition:max-height .24s cubic-bezier(.2,.8,.2,1),opacity .18s ease,padding .24s ease,border-color .18s ease}
+.toprow{display:flex;align-items:center;gap:8px}
+.heading{min-width:0;flex:1;border:0;background:transparent;padding:2px 0;text-align:left;color:inherit}
+.title{font-size:19px;font-weight:900;letter-spacing:-.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{margin-top:2px;font-size:11px;color:var(--muted);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{width:42px;height:42px;flex:0 0 42px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.96);color:var(--text);display:grid;place-items:center;font-size:17px;font-weight:900;box-shadow:0 4px 13px rgba(35,49,78,.045);transition:transform .14s ease,background .14s ease}
+.icon-btn:active{transform:scale(.94);background:var(--surface3)}
+.rooms{margin-top:8px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+.rooms::-webkit-scrollbar{display:none}
+.room-tab{min-height:37px;border:1px solid var(--line);border-radius:999px;padding:0 13px;background:var(--surface);color:#657187;font-size:12px;font-weight:800;white-space:nowrap;transition:transform .14s ease,background .16s ease,color .16s ease,border-color .16s ease}
+.room-tab:active{transform:scale(.96)}
+.room-tab.active{background:var(--text);border-color:var(--text);color:#fff;box-shadow:0 7px 18px rgba(23,32,51,.13)}
+.room-tab.add{width:38px;padding:0;font-size:18px}
+.viewport{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 12px calc(84px + env(safe-area-inset-bottom));scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+.scaler{position:relative;margin:auto}
+.world{position:absolute;left:0;top:0;width:2800px;height:2000px;transform-origin:top left;background:radial-gradient(circle at 1px 1px,rgba(88,105,136,.11) 1px,transparent 1.2px),#fbfcfe;background-size:28px 28px;transition:transform .16s cubic-bezier(.2,.8,.2,1)}
+.world.drag-mode{transition:none}
+.front{position:absolute;left:1150px;top:645px;width:500px;height:48px;border-radius:15px;border:1px solid #dde4ed;background:linear-gradient(180deg,#fff,#f5f8fb);color:#8a94a6;box-shadow:0 6px 18px rgba(39,54,82,.06);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;letter-spacing:.10em;text-transform:uppercase}
+.seat{position:absolute;width:104px;height:104px;border:1px solid #dce4ee;border-radius:17px;background:linear-gradient(180deg,#fff,#f8fafc);color:var(--text);box-shadow:var(--seatShadow);padding:9px;text-align:left;user-select:none;-webkit-user-select:none;touch-action:none;display:flex;flex-direction:column;justify-content:space-between;transition:left .20s cubic-bezier(.2,.8,.2,1),top .20s cubic-bezier(.2,.8,.2,1),transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease}
+.seat:active{transform:scale(.985)}
+.seat.dragging{z-index:60;transform:scale(1.055) rotate(-1deg);border-color:#aebfff;box-shadow:0 22px 46px rgba(42,62,112,.23);transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.seat.highlight{animation:seatHighlight .8s ease}
+@keyframes seatHighlight{0%,100%{box-shadow:var(--seatShadow)}35%{box-shadow:0 0 0 5px rgba(82,118,232,.18),0 14px 34px rgba(45,67,120,.19);border-color:#90a7f5}}
+.seat.warn-flash{animation:warnFlash .36s ease}
+@keyframes warnFlash{0%{transform:scale(1)}35%{transform:scale(1.08);background:var(--warnSoft);border-color:#ebbe77}100%{transform:scale(1)}}
+.seat.new-seat{animation:seatIn .27s cubic-bezier(.2,.8,.2,1)}
+@keyframes seatIn{from{opacity:0;transform:scale(.76)}to{opacity:1;transform:scale(1)}}
+.seat-top{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}
+.seat-number{font-size:16px;line-height:1;font-weight:950;color:#8691a4;letter-spacing:-.03em}
+.class-badge{max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 7px;border-radius:999px;background:var(--accentSoft);color:#4c68bf;font-size:13px;line-height:1;font-weight:950}
+.student-name{min-height:42px;padding-bottom:13px;font-size:15px;line-height:1.05;font-weight:950;letter-spacing:-.025em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.student-name.blank{visibility:hidden}
+.grip{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:22px;height:3px;border-radius:999px;background:#e4e9f0}
+.warning-badge,.bathroom-state{position:absolute;bottom:7px;min-width:23px;height:23px;padding:0 6px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:950;border:1px solid transparent}
+.warning-badge{right:7px;background:var(--warnSoft);color:#a96706;border-color:#f0d39f}
+.bathroom-state{left:7px;background:var(--wcSoft);color:#5559c6;border-color:#dadbff}
+.bathroom-state.overdue{background:var(--warnSoft);color:#a66706;border-color:#f0d39f;animation:pulseWarn 1.15s ease-in-out infinite}
+@keyframes pulseWarn{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.quick-wc{position:absolute;left:6px;bottom:6px;width:28px;height:28px;border:1px solid #e2e3ff;border-radius:10px;background:#f5f5ff;color:#666bd6;display:grid;place-items:center;padding:0;font-size:14px;opacity:.78;transition:transform .12s ease,opacity .12s ease,background .12s ease}
+.quick-wc:active{transform:scale(.90);opacity:1;background:#eaeaff}
+.bottom-dock{position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));z-index:45;transform:translateX(-50%);max-width:calc(100vw - 18px);display:flex;align-items:center;gap:5px;padding:6px;border:1px solid rgba(220,226,236,.96);border-radius:20px;background:rgba(255,255,255,.90);backdrop-filter:blur(18px);box-shadow:0 16px 42px rgba(29,43,71,.14);transition:opacity .18s ease,transform .22s cubic-bezier(.2,.8,.2,1)}
+.dock-btn{height:43px;min-width:43px;border:0;border-radius:14px;padding:0 10px;background:transparent;color:var(--text);font-weight:900;font-size:16px;transition:transform .12s ease,background .12s ease}
+.dock-btn:active{transform:scale(.92);background:var(--surface3)}
+.dock-btn.primary{background:var(--accent);color:#fff;box-shadow:0 7px 18px rgba(82,118,232,.22)}
+.dock-btn.wc{background:var(--wcSoft);color:#565bcc}
+.zoom-label{min-width:43px;text-align:center;font-size:11px;font-weight:850;color:#68748a}
+.focus-exit{position:fixed;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:65;width:44px;height:44px;border:1px solid rgba(215,222,232,.95);border-radius:15px;background:rgba(255,255,255,.90);backdrop-filter:blur(14px);color:var(--text);box-shadow:0 10px 28px rgba(27,39,67,.12);display:none;place-items:center;font-size:18px;font-weight:950}
+.focus-wc{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:65;min-height:44px;border:1px solid #dcdcff;border-radius:15px;padding:0 12px;background:rgba(247,247,255,.92);backdrop-filter:blur(14px);color:#565bcc;box-shadow:0 10px 28px rgba(27,39,67,.10);display:none;align-items:center;gap:7px;font-weight:900}
+.app.focus-mode .header{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-color:transparent;pointer-events:none}
+.app.focus-mode .bottom-dock{opacity:0;transform:translateX(-50%) translateY(90px);pointer-events:none}
+.app.focus-mode .focus-exit{display:grid;animation:fadePop .17s ease}
+.app.focus-mode .focus-wc{display:flex;animation:fadePop .17s ease}
+.app.focus-mode .viewport{padding-bottom:12px}
+@keyframes fadePop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.modal-bg{position:fixed;inset:0;z-index:100;display:none;align-items:flex-end;justify-content:center;padding:10px;background:rgba(27,36,54,.30);backdrop-filter:blur(5px)}
+.modal-bg.show{display:flex;animation:fadeIn .14s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{width:min(540px,100%);max-height:min(88dvh,760px);overflow:auto;border:1px solid rgba(221,227,236,.98);border-radius:27px 27px 20px 20px;background:rgba(255,255,255,.985);padding:18px;box-shadow:0 26px 70px rgba(28,39,66,.20);animation:sheetIn .20s cubic-bezier(.2,.8,.2,1)}
+@keyframes sheetIn{from{opacity:.55;transform:translateY(18px) scale(.987)}to{opacity:1;transform:none}}
+.modal h2{margin:0;font-size:20px;letter-spacing:-.03em}
+.modal p{margin:5px 0 14px;color:var(--muted);font-size:12px;line-height:1.45}
+.label{display:block;margin:10px 0 6px;color:#6d788b;font-size:11px;font-weight:900}
+.input{width:100%;height:50px;border:1px solid var(--line);border-radius:15px;background:#fafbfd;color:var(--text);outline:0;padding:0 13px;font-size:16px;transition:border-color .14s ease,box-shadow .14s ease,background .14s ease}
+.input:focus{border-color:#98abef;background:#fff;box-shadow:0 0 0 4px rgba(82,118,232,.09)}
+.actions{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap}
+.btn{min-height:46px;border:1px solid var(--line);border-radius:14px;padding:0 14px;background:#f8fafc;color:var(--text);font-weight:850;transition:transform .12s ease,background .12s ease}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{background:var(--dangerSoft);border-color:#ffd9df;color:var(--danger)}
+.btn.warning{background:var(--warnSoft);border-color:#f0d39f;color:#a66706}
+.btn.wc{background:var(--wcSoft);border-color:#dedfff;color:#555ac8}
+.grow{flex:1}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.chips::-webkit-scrollbar{display:none}
+.chip{min-height:34px;border:1px solid var(--line);border-radius:999px;padding:0 11px;background:#fafbfd;color:#667187;font-size:12px;font-weight:850;white-space:nowrap}
+.warning-editor{margin-top:12px;padding:11px;border:1px solid #f0ddb8;border-radius:15px;background:#fffaf1;display:flex;align-items:center;gap:9px}
+.warning-editor .count{min-width:34px;height:34px;border-radius:11px;background:#fff0d2;color:#a76a08;display:grid;place-items:center;font-weight:950}
+.warning-editor .copy{flex:1;min-width:0}
+.warning-editor .copy b{display:block;font-size:13px}
+.warning-editor .copy small{display:block;color:#947c56;font-size:11px;margin-top:2px}
+.menu-list{display:grid;gap:8px}
+.menu-item{width:100%;min-height:50px;border:1px solid var(--line);border-radius:15px;background:#fafbfd;color:var(--text);padding:0 14px;display:flex;align-items:center;justify-content:space-between;text-align:left;font-weight:800}
+.menu-item small{font-size:11px;color:var(--muted);font-weight:650}
+.menu-item.danger{color:var(--danger);background:#fff9fa}
+.search-results,.student-picker,.queue-list{display:grid;gap:7px;margin-top:11px}
+.result-row,.student-row,.queue-row{width:100%;min-height:52px;border:1px solid var(--line);border-radius:15px;background:#fafbfd;display:flex;align-items:center;gap:10px;padding:8px 11px;color:var(--text);text-align:left}
+.result-row:active,.student-row:active{transform:scale(.99)}
+.avatar{width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:var(--accentSoft);color:#4d69c1;display:grid;place-items:center;font-size:12px;font-weight:950}
+.avatar.wc{background:var(--wcSoft);color:#575bc8}
+.row-main{flex:1;min-width:0}
+.row-main b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-main small{display:block;margin-top:2px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-action{min-width:36px;height:36px;border:0;border-radius:11px;background:var(--surface3);color:#667287;font-weight:900}
+.empty-state{padding:20px 10px;text-align:center;color:var(--muted);font-size:12px;line-height:1.45}
+.wc-current{border:1px solid #dedeff;background:linear-gradient(180deg,#f8f8ff,#f1f1ff);border-radius:18px;padding:13px;margin:11px 0 4px}
+.wc-current-label{font-size:10px;color:#7276d1;font-weight:950;text-transform:uppercase;letter-spacing:.08em}
+.wc-current-name{margin-top:4px;font-size:17px;font-weight:950;letter-spacing:-.02em}
+.wc-current-sub{margin-top:2px;font-size:11px;color:#777e92}
+.wc-timer-wrap{margin-top:12px;display:flex;align-items:center;gap:9px}
+.wc-timer{font-variant-numeric:tabular-nums;letter-spacing:-.03em;font-size:28px;line-height:1;font-weight:950;color:#5055c5}
+.wc-overdue{display:none;align-items:center;gap:5px;padding:6px 9px;border:1px solid #f0d39f;border-radius:999px;background:var(--warnSoft);color:#a66706;font-size:11px;font-weight:950}
+.wc-overdue.show{display:flex;animation:fadePop .18s ease}
+.queue-pos{width:31px;height:31px;flex:0 0 31px;border-radius:10px;background:var(--wcSoft);color:#585ccc;display:grid;place-items:center;font-size:12px;font-weight:950}
+.section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;font-size:12px;font-weight:950;color:#647086}
+.count-pill{padding:4px 7px;border-radius:999px;background:var(--surface3);font-size:10px}
+.toast{position:fixed;left:50%;top:calc(13px + env(safe-area-inset-top));z-index:300;transform:translateX(-50%) translateY(-12px);opacity:0;pointer-events:none;min-height:42px;max-width:calc(100vw - 24px);padding:7px 8px 7px 13px;border-radius:999px;background:#172033;color:#fff;display:flex;align-items:center;gap:9px;box-shadow:0 13px 38px rgba(23,32,51,.22);transition:.18s ease}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast-text{font-size:12px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toast-action{min-height:30px;border:0;border-radius:999px;padding:0 10px;background:rgba(255,255,255,.15);color:#fff;font-size:11px;font-weight:900}
+.app.focus-mode .toast{top:calc(62px + env(safe-area-inset-top))}
+@media (orientation:landscape) and (max-height:600px){
+  .header{padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:6px}
+  .rooms{margin-top:6px}.room-tab{min-height:33px}.title{font-size:17px}
+  .viewport{padding-top:8px}.bottom-dock{bottom:calc(7px + env(safe-area-inset-bottom))}
+  .dock-btn{height:40px;min-width:40px}
+}
+@media (min-width:760px){
+  .header{padding-left:18px;padding-right:18px}.viewport{padding-left:18px;padding-right:18px}
+  .modal-bg{align-items:center}.modal{border-radius:24px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="header">
+    <div class="toprow">
+      <button class="heading" id="roomHeading" aria-label="Centralizar cadeiras">
+        <div class="title" id="roomTitle">Sala 1</div>
+        <div class="sub" id="roomSub">30 cadeiras</div>
+      </button>
+      <button class="icon-btn" id="searchBtn" aria-label="Procurar aluno">⌕</button>
+      <button class="icon-btn" id="menuBtn" aria-label="Abrir menu">•••</button>
+    </div>
+    <div class="rooms" id="roomTabs"></div>
+  </header>
+
+  <main class="viewport" id="viewport">
+    <div class="scaler" id="scaler">
+      <div class="world" id="world">
+        <div class="front">Frente da sala / quadro</div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-dock" aria-label="Ações rápidas">
+    <button class="dock-btn" id="centerBtn" aria-label="Centralizar cadeiras">⌂</button>
+    <button class="dock-btn" id="zoomOut" aria-label="Diminuir zoom">−</button>
+    <div class="zoom-label" id="zoomValue">100%</div>
+    <button class="dock-btn" id="zoomIn" aria-label="Aumentar zoom">＋</button>
+    <button class="dock-btn wc" id="bathroomBtn" aria-label="Fila do banheiro">🚻</button>
+    <button class="dock-btn primary" id="addSeatBtn" aria-label="Adicionar cadeira">＋</button>
+    <button class="dock-btn" id="focusBtn" aria-label="Modo tela limpa">⛶</button>
+  </nav>
+
+  <button class="focus-exit" id="focusExit" aria-label="Sair do modo tela limpa">⌄</button>
+  <button class="focus-wc" id="focusWc" aria-label="Fila do banheiro">🚻 <span id="focusWcCount">0</span></button>
+</div>
+
+<div class="modal-bg" id="editBg">
+  <div class="modal">
+    <h2 id="editTitle">Editar assento</h2>
+    <p>Toque duplo no assento para adicionar uma advertência. Segure para mover.</p>
+    <label class="label" for="studentInput">Aluno</label>
+    <input class="input" id="studentInput" maxlength="70" placeholder="Nome do aluno" autocomplete="off">
+    <label class="label" for="classInput">Turma</label>
+    <input class="input" id="classInput" maxlength="40" placeholder="X°" list="classSuggestions" autocomplete="off">
+    <datalist id="classSuggestions"></datalist>
+    <div class="chips" id="classChips"></div>
+
+    <div class="warning-editor">
+      <div class="count" id="warningCount">0</div>
+      <div class="copy"><b>Advertências</b><small>Duplo toque na cadeira adiciona +1.</small></div>
+      <button class="btn warning" id="removeWarningBtn">−1</button>
+      <button class="btn" id="clearWarningsBtn">Zerar</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn wc" id="editBathroomBtn">🚻 Fila</button>
+      <button class="btn danger" id="deleteSeatBtn">Excluir</button>
+      <button class="btn grow" id="cancelEdit">Cancelar</button>
+      <button class="btn primary grow" id="saveEdit">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="bathroomBg">
+  <div class="modal">
+    <h2>🚻 Banheiro</h2>
+    <p>Fila por número da cadeira. A ordem é exatamente a ordem dos seus toques.</p>
+    <div id="bathroomContent"></div>
+    <div class="actions"><button class="btn grow" id="closeBathroom">Fechar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="searchBg">
+  <div class="modal">
+    <h2>Procurar aluno</h2>
+    <p>Toque em um resultado para ir direto para a cadeira.</p>
+    <input class="input" id="searchInput" maxlength="70" placeholder="Digite um nome ou turma" autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+    <div class="actions"><button class="btn grow" id="closeSearch">Fechar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="promptBg">
+  <div class="modal">
+    <h2 id="promptTitle">Novo</h2>
+    <p id="promptText"></p>
+    <input class="input" id="promptInput" maxlength="60" autocomplete="off">
+    <div class="actions">
+      <button class="btn grow" id="promptCancel">Cancelar</button>
+      <button class="btn primary grow" id="promptOk">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="menuBg">
+  <div class="modal">
+    <h2>Opções da sala</h2>
+    <p>Ferramentas de organização e backup.</p>
+    <div class="menu-list">
+      <button class="menu-item" id="renameRoom"><span>Renomear sala</span><small>nome da aba</small></button>
+      <button class="menu-item" id="resetPositions"><span>Organizar em 5 × 6</span><small>centraliza tudo</small></button>
+      <button class="menu-item" id="exportData"><span>Exportar backup</span><small>arquivo JSON</small></button>
+      <button class="menu-item" id="importData"><span>Importar backup</span><small>restaurar tudo</small></button>
+      <button class="menu-item danger" id="clearRoom"><span>Limpar dados da sala</span><small>mantém cadeiras</small></button>
+      <button class="menu-item danger" id="deleteRoom"><span>Excluir sala</span><small>irreversível</small></button>
+    </div>
+    <div class="actions"><button class="btn grow" id="closeMenu">Fechar</button></div>
+  </div>
+</div>
+
+<input id="importFile" type="file" accept=".json,application/json" hidden>
+
+<div class="toast" id="toast">
+  <span class="toast-text" id="toastText"></span>
+  <button class="toast-action" id="toastAction" hidden>Desfazer</button>
+</div>
+
+<script>
+(() => {
+  const KEY='mapaSalaStandalone_v7';
+  const PREV_KEYS=['mapaSalaStandalone_v6','mapaSalaStandalone_v5','mapaSalaStandalone_v4','mapaSalaStandalone_v3','mapaSalaStandalone_v2'];
+  const WORLD_W=2800, WORLD_H=2000, WORLD_CENTER_X=WORLD_W/2, WORLD_CENTER_Y=WORLD_H/2;
+  const SEAT_W=104, SEAT_H=104, MIN_ZOOM=.42, MAX_ZOOM=1.65;
+
+  const $=s=>document.querySelector(s);
+  const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-5);
+  const app=$('#app'), world=$('#world'), scaler=$('#scaler'), viewport=$('#viewport');
+  const roomTabs=$('#roomTabs'), editBg=$('#editBg'), bathroomBg=$('#bathroomBg');
+  const searchBg=$('#searchBg'), promptBg=$('#promptBg'), menuBg=$('#menuBg');
+
+  let state=load();
+  let activeRoomId=state.activeRoomId||state.rooms[0].id;
+  let zoom=Number.isFinite(Number(state.zoom))?Number(state.zoom):1;
+  let editingSeatId=null, editWarningDraft=0, promptResolve=null, dragging=null;
+  let addAnimationId=null, flashWarningId=null, highlightSeatId=null, toastTimer=null, undoAction=null, pinch=null;
+
+  function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+  function esc(str=''){return String(str).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+
+  function makeSeat(index=0){
+    const col=index%5,row=Math.floor(index/5),startX=WORLD_CENTER_X-310,startY=WORLD_CENTER_Y-285;
+    return{id:uid(),x:startX+col*128,y:startY+row*116,name:'',className:'X°',warnings:0};
+  }
+  function makeRoom(name='Sala 1'){
+    return{id:uid(),name,seats:Array.from({length:30},(_,i)=>makeSeat(i)),bathroom:{current:null,queue:[]}};
+  }
+  function normalizeState(data){
+    if(!Array.isArray(data.rooms)||!data.rooms.length) data.rooms=[makeRoom()];
+    data.rooms.forEach((r,ri)=>{
+      r.id=r.id||uid(); r.name=String(r.name||`Sala ${ri+1}`); if(!Array.isArray(r.seats)) r.seats=[];
+      r.seats.forEach((s,i)=>{
+        const p=makeSeat(i);
+        s.id=s.id||uid(); s.x=Number.isFinite(Number(s.x))?Number(s.x):p.x; s.y=Number.isFinite(Number(s.y))?Number(s.y):p.y;
+        s.name=String(s.name||''); s.className=String(s.className||'').trim()||'X°'; s.warnings=Math.max(0,Math.floor(Number(s.warnings)||0));
+        s.x=clamp(s.x,0,WORLD_W-SEAT_W); s.y=clamp(s.y,0,WORLD_H-SEAT_H);
+      });
+      if(!r.bathroom||typeof r.bathroom!=='object') r.bathroom={current:null,queue:[]};
+      if(!Array.isArray(r.bathroom.queue)) r.bathroom.queue=[];
+      r.bathroom.queue=r.bathroom.queue.map(q=>typeof q==='string'?{seatId:q,addedAt:Date.now()}:q).filter(q=>q&&r.seats.some(s=>s.id===q.seatId));
+      if(r.bathroom.current){
+        if(typeof r.bathroom.current==='string') r.bathroom.current={seatId:r.bathroom.current,since:Date.now()};
+        if(!r.seats.some(s=>s.id===r.bathroom.current.seatId)) r.bathroom.current=null;
+      }
+    });
+    return data;
+  }
+  function load(){
+    try{
+      const raw=localStorage.getItem(KEY);
+      if(raw){const parsed=JSON.parse(raw);if(parsed?.rooms?.length)return normalizeState(parsed)}
+      for(const key of PREV_KEYS){
+        const prev=localStorage.getItem(key);
+        if(prev){const migrated=normalizeState(JSON.parse(prev));localStorage.setItem(KEY,JSON.stringify(migrated));return migrated}
+      }
+    }catch(e){}
+    const first=makeRoom(); return{rooms:[first],activeRoomId:first.id,zoom:1,focusMode:false};
+  }
+  function save(){
+    state.activeRoomId=activeRoomId; state.zoom=zoom; state.focusMode=app.classList.contains('focus-mode');
+    localStorage.setItem(KEY,JSON.stringify(state));
+  }
+  function getRoom(){return state.rooms.find(r=>r.id===activeRoomId)||state.rooms[0]}
+  function queueInfo(room,seatId){
+    if(room.bathroom.current?.seatId===seatId)return{type:'current',pos:0};
+    const idx=room.bathroom.queue.findIndex(q=>q.seatId===seatId);
+    return idx>=0?{type:'queue',pos:idx+1}:null;
+  }
+
+  function render(){
+    const room=getRoom();
+    const classes=[...new Set(room.seats.map(s=>s.className.trim()).filter(Boolean))];
+    const warningTotal=room.seats.reduce((sum,s)=>sum+(s.warnings||0),0);
+    const bathroomCount=room.bathroom.queue.length+(room.bathroom.current?1:0);
+
+    $('#roomTitle').textContent=room.name;
+    $('#roomSub').textContent=`${room.seats.length} cadeira${room.seats.length!==1?'s':''} • ${classes.length} turma${classes.length!==1?'s':''}${warningTotal?` • ${warningTotal} advertência${warningTotal!==1?'s':''}`:''}${bathroomCount?` • 🚻 ${bathroomCount}`:''}`;
+    $('#focusWcCount').textContent=bathroomCount;
+    $('#bathroomBtn').textContent=bathroomCount?`🚻 ${bathroomCount}`:'🚻';
+
+    roomTabs.innerHTML='';
+    state.rooms.forEach(r=>{
+      const b=document.createElement('button');
+      b.type='button'; b.className='room-tab'+(r.id===room.id?' active':''); b.textContent=r.name;
+      b.addEventListener('click',()=>{
+        if(r.id===activeRoomId){fitRoom(true);return}
+        activeRoomId=r.id;save();render();requestAnimationFrame(()=>fitRoom(false));
+      });
+      roomTabs.appendChild(b);
+    });
+    const add=document.createElement('button');
+    add.type='button';add.className='room-tab add';add.textContent='＋';add.setAttribute('aria-label','Adicionar sala');add.addEventListener('click',addRoom);roomTabs.appendChild(add);
+
+    world.querySelectorAll('.seat').forEach(el=>el.remove());
+    room.seats.forEach((seat,i)=>{
+      seat.x=clamp(Number(seat.x)||0,0,WORLD_W-SEAT_W);seat.y=clamp(Number(seat.y)||0,0,WORLD_H-SEAT_H);
+      const info=queueInfo(room,seat.id);
+      const el=document.createElement('button');
+      el.type='button';
+      el.className='seat'+(seat.id===addAnimationId?' new-seat':'')+(seat.id===flashWarningId?' warn-flash':'')+(seat.id===highlightSeatId?' highlight':'');
+      el.dataset.id=seat.id;el.style.left=seat.x+'px';el.style.top=seat.y+'px';
+      el.setAttribute('aria-label',`Assento ${i+1}${seat.name?', '+seat.name:''}, ${seat.className}, ${seat.warnings||0} advertências`);
+
+      const top=document.createElement('div');top.className='seat-top';
+      const num=document.createElement('span');num.className='seat-number';num.textContent=String(i+1);
+      const badge=document.createElement('span');badge.className='class-badge';badge.textContent=seat.className.trim()||'X°';
+      top.append(num,badge);
+
+      const name=document.createElement('div');name.className='student-name'+(seat.name.trim()?'':' blank');name.textContent=seat.name.trim()||'—';
+      const grip=document.createElement('span');grip.className='grip';
+      el.append(top,name,grip);
+
+      if(seat.warnings>0){
+        const wb=document.createElement('span');wb.className='warning-badge';wb.textContent=`⚠ ${seat.warnings}`;el.appendChild(wb);
+      }
+      if(info){
+        const bs=document.createElement('span');
+        const currentOverdue=info.type==='current' && room.bathroom.current && (Date.now()-Number(room.bathroom.current.since||Date.now())>=180000);
+        bs.className='bathroom-state'+(currentOverdue?' overdue':'');
+        bs.textContent=info.type==='current'?(currentOverdue?'⚠️ 🚻':'🚻'):`🚻 ${info.pos}`;
+        el.appendChild(bs);
+      }else{
+        const quick=document.createElement('button');
+        quick.type='button';quick.className='quick-wc';quick.textContent='🚻';
+        quick.setAttribute('aria-label',`Adicionar cadeira ${i+1} à fila do banheiro`);
+        quick.addEventListener('pointerdown',e=>e.stopPropagation());
+        quick.addEventListener('pointerup',e=>e.stopPropagation());
+        quick.addEventListener('click',e=>{e.stopPropagation();addToBathroomQueue(seat.id,true)});
+        el.appendChild(quick);
+      }
+      bindSeat(el,seat);world.appendChild(el);
+    });
+
+    addAnimationId=null;
+    if(flashWarningId)setTimeout(()=>flashWarningId=null,400);
+    if(highlightSeatId)setTimeout(()=>highlightSeatId=null,900);
+    updateClassHelpers();updateScale(false);save();
+    if(bathroomBg.classList.contains('show'))renderBathroom();
+  }
+
+  function updateClassHelpers(){
+    const classes=[...new Set(getRoom().seats.map(s=>s.className.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    const dl=$('#classSuggestions');dl.innerHTML='';classes.forEach(c=>{const o=document.createElement('option');o.value=c;dl.appendChild(o)});
+    const chips=$('#classChips');chips.innerHTML='';classes.slice(0,8).forEach(c=>{const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=c;b.addEventListener('click',()=>$('#classInput').value=c);chips.appendChild(b)});
+  }
+
+  function updateScale(animate=true){
+    zoom=clamp(zoom,MIN_ZOOM,MAX_ZOOM);world.classList.toggle('drag-mode',!animate);world.style.transform=`scale(${zoom})`;
+    scaler.style.width=(WORLD_W*zoom)+'px';scaler.style.height=(WORLD_H*zoom)+'px';$('#zoomValue').textContent=Math.round(zoom*100)+'%';
+    if(!animate)requestAnimationFrame(()=>world.classList.remove('drag-mode'));save();
+  }
+  function seatBounds(room=getRoom()){
+    if(!room.seats.length)return null;
+    return{minX:Math.min(...room.seats.map(s=>s.x)),minY:Math.min(...room.seats.map(s=>s.y)),maxX:Math.max(...room.seats.map(s=>s.x+SEAT_W)),maxY:Math.max(...room.seats.map(s=>s.y+SEAT_H))};
+  }
+  function fitRoom(animate=true){
+    const b=seatBounds();if(!b)return;
+    const pad=54,bw=Math.max(280,b.maxX-b.minX),bh=Math.max(280,b.maxY-b.minY);
+    zoom=clamp(Math.min((viewport.clientWidth-pad)/bw,(viewport.clientHeight-pad)/bh,1.20),MIN_ZOOM,MAX_ZOOM);updateScale(animate);
+    requestAnimationFrame(()=>{const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;viewport.scrollLeft=cx*zoom-viewport.clientWidth/2;viewport.scrollTop=cy*zoom-viewport.clientHeight/2});
+  }
+  function setZoom(next){
+    const old=zoom,cx=viewport.scrollLeft+viewport.clientWidth/2,cy=viewport.scrollTop+viewport.clientHeight/2,lx=cx/old,ly=cy/old;
+    zoom=clamp(next,MIN_ZOOM,MAX_ZOOM);updateScale(true);
+    requestAnimationFrame(()=>{viewport.scrollLeft=lx*zoom-viewport.clientWidth/2;viewport.scrollTop=ly*zoom-viewport.clientHeight/2});
+  }
+  function centerOnSeat(seatId,focus=true){
+    const seat=getRoom().seats.find(s=>s.id===seatId);if(!seat)return;
+    if(zoom<.7)zoom=.9;updateScale(true);
+    requestAnimationFrame(()=>{
+      viewport.scrollTo({left:(seat.x+SEAT_W/2)*zoom-viewport.clientWidth/2,top:(seat.y+SEAT_H/2)*zoom-viewport.clientHeight/2,behavior:'smooth'});
+      if(focus){highlightSeatId=seatId;setTimeout(()=>render(),220)}
+    });
+  }
+
+  function bindSeat(el,seat){
+    let timer=null,startX=0,startY=0,moved=false,longStarted=false,lastTap=0,singleTimer=null,originalX=seat.x,originalY=seat.y;
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    el.addEventListener('pointerdown',e=>{
+      if(e.target.closest('.quick-wc'))return;if(e.button!=null&&e.button!==0)return;
+      startX=e.clientX;startY=e.clientY;moved=false;longStarted=false;originalX=seat.x;originalY=seat.y;
+      timer=setTimeout(()=>{
+        longStarted=true;clearTimeout(singleTimer);dragging={id:seat.id,pointerId:e.pointerId,offsetX:0,offsetY:0};
+        const rect=world.getBoundingClientRect(),px=(e.clientX-rect.left)/zoom,py=(e.clientY-rect.top)/zoom;
+        dragging.offsetX=px-seat.x;dragging.offsetY=py-seat.y;el.classList.add('dragging');world.classList.add('drag-mode');
+        try{el.setPointerCapture(e.pointerId)}catch(_){}
+        if(navigator.vibrate)navigator.vibrate(16);
+      },290);
+    });
+    el.addEventListener('pointermove',e=>{
+      const dx=e.clientX-startX,dy=e.clientY-startY;if(Math.hypot(dx,dy)>8)moved=true;if(!longStarted&&moved){clearTimeout(timer);timer=null}
+      if(dragging?.id===seat.id){
+        e.preventDefault();const rect=world.getBoundingClientRect(),px=(e.clientX-rect.left)/zoom,py=(e.clientY-rect.top)/zoom;
+        seat.x=clamp(px-dragging.offsetX,0,WORLD_W-SEAT_W);seat.y=clamp(py-dragging.offsetY,0,WORLD_H-SEAT_H);el.style.left=seat.x+'px';el.style.top=seat.y+'px';
+      }
+    });
+    const finish=e=>{
+      clearTimeout(timer);timer=null;
+      if(dragging?.id===seat.id){
+        try{el.releasePointerCapture(e.pointerId)}catch(_){}
+        dragging=null;el.classList.remove('dragging');world.classList.remove('drag-mode');const newX=seat.x,newY=seat.y;save();
+        if(Math.hypot(newX-originalX,newY-originalY)>3)showToast('Cadeira movida','Desfazer',()=>{seat.x=originalX;seat.y=originalY;save();render();centerOnSeat(seat.id,false)});
+        return;
+      }
+      if(!moved&&!longStarted){
+        const now=Date.now();
+        if(now-lastTap<315){clearTimeout(singleTimer);lastTap=0;addWarning(seat)}
+        else{lastTap=now;clearTimeout(singleTimer);singleTimer=setTimeout(()=>{if(lastTap){openEdit(seat.id);lastTap=0}},325)}
+      }
+    };
+    el.addEventListener('pointerup',finish);
+    el.addEventListener('pointercancel',()=>{clearTimeout(timer);clearTimeout(singleTimer);if(dragging?.id===seat.id){dragging=null;el.classList.remove('dragging');world.classList.remove('drag-mode');save()}});
+  }
+
+  function addWarning(seat){
+    const before=seat.warnings||0;seat.warnings=before+1;flashWarningId=seat.id;if(navigator.vibrate)navigator.vibrate([16,24,16]);save();render();
+    showToast(`${seat.name.trim()||'Aluno'}: ${seat.warnings} advertência${seat.warnings!==1?'s':''}`,'Desfazer',()=>{seat.warnings=before;save();render()});
+  }
+  function openEdit(id){
+    const room=getRoom(),seat=room.seats.find(s=>s.id===id);if(!seat)return;
+    editingSeatId=id;editWarningDraft=seat.warnings||0;$('#editTitle').textContent=`Assento ${room.seats.indexOf(seat)+1}`;
+    $('#studentInput').value=seat.name||'';$('#classInput').value=seat.className||'X°';updateWarningEditor();updateEditBathroomButton();editBg.classList.add('show');
+    setTimeout(()=>$('#studentInput').focus(),60);
+  }
+  function updateWarningEditor(){$('#warningCount').textContent=editWarningDraft}
+  function updateEditBathroomButton(){
+    const info=queueInfo(getRoom(),editingSeatId),btn=$('#editBathroomBtn');
+    btn.textContent=info?.type==='current'?'🚻 No banheiro':info?.type==='queue'?`🚻 Fila #${info.pos}`:'🚻 Fila';
+  }
+  function closeEdit(){editBg.classList.remove('show');editingSeatId=null}
+  function saveEdit(){
+    const seat=getRoom().seats.find(s=>s.id===editingSeatId);if(!seat)return closeEdit();
+    seat.name=$('#studentInput').value.trim();seat.className=$('#classInput').value.trim()||'X°';seat.warnings=Math.max(0,editWarningDraft);save();closeEdit();render();
+  }
+  function deleteSeat(){
+    const room=getRoom(),seat=room.seats.find(s=>s.id===editingSeatId);if(!seat)return;
+    if(room.seats.length<=1){showToast('A sala precisa ter ao menos uma cadeira');return}
+    if(!confirm('Excluir esta cadeira?'))return;
+    const idx=room.seats.indexOf(seat),backup=JSON.parse(JSON.stringify(seat));
+    room.seats.splice(idx,1);room.bathroom.queue=room.bathroom.queue.filter(q=>q.seatId!==seat.id);if(room.bathroom.current?.seatId===seat.id)room.bathroom.current=null;
+    closeEdit();save();render();showToast('Cadeira excluída','Desfazer',()=>{room.seats.splice(Math.min(idx,room.seats.length),0,backup);save();render();centerOnSeat(backup.id)});
+  }
+  function addSeat(){
+    const room=getRoom(),seat=makeSeat(room.seats.length),cx=(viewport.scrollLeft+viewport.clientWidth/2)/zoom,cy=(viewport.scrollTop+viewport.clientHeight/2)/zoom;
+    seat.x=clamp(cx-SEAT_W/2,0,WORLD_W-SEAT_W);seat.y=clamp(cy-SEAT_H/2,0,WORLD_H-SEAT_H);room.seats.push(seat);addAnimationId=seat.id;save();render();setTimeout(()=>openEdit(seat.id),180);
+  }
+  function toggleFocus(force){
+    const next=typeof force==='boolean'?force:!app.classList.contains('focus-mode');app.classList.toggle('focus-mode',next);save();setTimeout(()=>fitRoom(true),230);
+  }
+
+  async function addRoom(){
+    const name=await ask('Nova sala','Escolha o nome da nova sala.',`Sala ${state.rooms.length+1}`,'Criar');if(!name)return;
+    const room=makeRoom(name.trim());state.rooms.push(room);activeRoomId=room.id;save();render();requestAnimationFrame(()=>fitRoom(false));
+  }
+  async function renameRoom(){
+    const room=getRoom();closeMenu();const name=await ask('Renomear sala','Escolha o novo nome da sala.',room.name,'Salvar');if(!name)return;room.name=name.trim();save();render();
+  }
+  function organize5x6(){
+    const room=getRoom(),cols=5,rows=Math.ceil(room.seats.length/cols),startX=WORLD_CENTER_X-((cols-1)*128+SEAT_W)/2,startY=WORLD_CENTER_Y-((rows-1)*116+SEAT_H)/2;
+    room.seats.forEach((seat,i)=>{seat.x=startX+(i%cols)*128;seat.y=startY+Math.floor(i/cols)*116});
+    closeMenu();save();render();requestAnimationFrame(()=>fitRoom(true));showToast('Cadeiras organizadas');
+  }
+  function clearRoom(){
+    const room=getRoom();if(!confirm('Limpar nomes, turmas, advertências e fila do banheiro desta sala?'))return;
+    room.seats.forEach(s=>{s.name='';s.className='X°';s.warnings=0});room.bathroom={current:null,queue:[]};closeMenu();save();render();
+  }
+  function deleteRoom(){
+    const room=getRoom();if(state.rooms.length<=1){showToast('Você precisa ter pelo menos uma sala');return}
+    if(!confirm(`Excluir "${room.name}"?`))return;state.rooms=state.rooms.filter(r=>r.id!==room.id);activeRoomId=state.rooms[0].id;closeMenu();save();render();requestAnimationFrame(()=>fitRoom(false));
+  }
+
+  function openBathroom(){renderBathroom();bathroomBg.classList.add('show')}
+  function closeBathroom(){bathroomBg.classList.remove('show')}
+  function addToBathroomQueue(seatId,fromQuick=false){
+    const room=getRoom(),seat=room.seats.find(s=>s.id===seatId);if(!seat)return;
+    const info=queueInfo(room,seatId);if(info){openBathroom();return}
+    const chairNumber=room.seats.indexOf(seat)+1;
+    room.bathroom.queue.push({seatId,addedAt:Date.now()});
+    if(navigator.vibrate)navigator.vibrate(12);
+    save();render();
+    showToast(`Cadeira ${chairNumber} entrou na fila`,'Desfazer',()=>{
+      room.bathroom.queue=room.bathroom.queue.filter(q=>q.seatId!==seatId);
+      save();render();
+    });
+  }
+  function sendNextToBathroom(){
+    const room=getRoom();if(room.bathroom.current){showToast('Já tem alguém no banheiro');return}
+    const next=room.bathroom.queue.shift();if(!next){showToast('A fila está vazia');return}
+    room.bathroom.current={seatId:next.seatId,since:Date.now()};save();render();renderBathroom();
+    const seat=room.seats.find(s=>s.id===next.seatId);
+    const chairNumber=seat?room.seats.indexOf(seat)+1:'?';
+    showToast(`Cadeira ${chairNumber} liberada para o banheiro`);
+  }
+  function currentReturned(){
+    const room=getRoom();if(!room.bathroom.current)return;
+    const seat=room.seats.find(s=>s.id===room.bathroom.current.seatId);
+    const chairNumber=seat?room.seats.indexOf(seat)+1:'?';
+    room.bathroom.current=null;save();render();renderBathroom();showToast(`Cadeira ${chairNumber} voltou`);
+  }
+  function removeFromQueue(seatId){
+    const room=getRoom();room.bathroom.queue=room.bathroom.queue.filter(q=>q.seatId!==seatId);save();render();renderBathroom();
+  }
+  function formatWait(ts){
+    const mins=Math.max(0,Math.floor((Date.now()-Number(ts||Date.now()))/60000));return mins<1?'agora':`${mins} min`;
+  }
+  function formatBathroomTimer(ts){
+    const seconds=Math.max(0,Math.floor((Date.now()-Number(ts||Date.now()))/1000));
+    const m=Math.floor(seconds/60);
+    const s=seconds%60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  function bathroomIsOverdue(ts){
+    return Date.now()-Number(ts||Date.now())>=180000;
+  }
+  function updateBathroomClock(){
+    const room=getRoom();
+    const current=room.bathroom.current;
+    const timerEl=$('#wcLiveTimer');
+    const warningEl=$('#wcLiveWarning');
+
+    if(current){
+      const overdue=bathroomIsOverdue(current.since);
+      if(timerEl) timerEl.textContent=formatBathroomTimer(current.since);
+      if(warningEl) warningEl.classList.toggle('show',overdue);
+
+      document.querySelectorAll('.seat .bathroom-state').forEach(el=>{
+        const seatEl=el.closest('.seat');
+        if(!seatEl) return;
+        if(seatEl.dataset.id===current.seatId){
+          el.classList.toggle('overdue',overdue);
+          el.textContent=overdue?'⚠️ 🚻':'🚻';
+        }
+      });
+    }
+  }
+  function renderBathroom(){
+    const room=getRoom(),host=$('#bathroomContent');host.innerHTML='';
+    if(room.bathroom.current){
+      const seat=room.seats.find(s=>s.id===room.bathroom.current.seatId),box=document.createElement('div');box.className='wc-current';
+      const chairNumber=seat?room.seats.indexOf(seat)+1:'?';
+      const optionalName=seat?.name?.trim()?` • ${esc(seat.name.trim())}`:'';
+      const overdue=bathroomIsOverdue(room.bathroom.current.since);
+      box.innerHTML=`<div class="wc-current-label">No banheiro agora</div><div class="wc-current-name">Cadeira ${chairNumber}</div><div class="wc-current-sub">${esc(seat?.className||'X°')}${optionalName}</div><div class="wc-timer-wrap"><div class="wc-timer" id="wcLiveTimer">${formatBathroomTimer(room.bathroom.current.since)}</div><div class="wc-overdue${overdue?' show':''}" id="wcLiveWarning">⚠️ Mais de 3 minutos</div></div>`;
+      const actions=document.createElement('div');actions.className='actions';const back=document.createElement('button');back.type='button';back.className='btn primary grow';back.textContent='✓ Voltou';back.addEventListener('click',currentReturned);actions.appendChild(back);box.appendChild(actions);host.appendChild(box);
+    }else{
+      const box=document.createElement('div');box.className='wc-current';box.innerHTML=`<div class="wc-current-label">Banheiro livre</div><div class="wc-current-name">Ninguém fora da sala</div>`;
+      if(room.bathroom.queue.length){const actions=document.createElement('div');actions.className='actions';const next=document.createElement('button');next.type='button';next.className='btn primary grow';next.textContent='Liberar próximo';next.addEventListener('click',sendNextToBathroom);actions.appendChild(next);box.appendChild(actions)}
+      host.appendChild(box);
+    }
+
+    const qTitle=document.createElement('div');qTitle.className='section-title';qTitle.innerHTML=`<span>Fila de espera</span><span class="count-pill">${room.bathroom.queue.length}</span>`;host.appendChild(qTitle);
+    const queue=document.createElement('div');queue.className='queue-list';
+    if(!room.bathroom.queue.length)queue.innerHTML='<div class="empty-state">Ninguém esperando.</div>';
+    else room.bathroom.queue.forEach((q,i)=>{
+      const seat=room.seats.find(s=>s.id===q.seatId);if(!seat)return;
+      const chairNumber=room.seats.indexOf(seat)+1;
+      const row=document.createElement('div');row.className='queue-row';
+      const optionalName=seat.name.trim()?` • ${esc(seat.name.trim())}`:'';
+      row.innerHTML=`<div class="queue-pos">${i+1}</div><div class="row-main"><b>Cadeira ${chairNumber}</b><small>${esc(seat.className)}${optionalName} • esperando ${esc(formatWait(q.addedAt))}</small></div>`;
+      const rm=document.createElement('button');rm.type='button';rm.className='row-action';rm.textContent='×';rm.setAttribute('aria-label','Remover da fila');rm.addEventListener('click',()=>removeFromQueue(seat.id));row.appendChild(rm);queue.appendChild(row);
+    });
+    host.appendChild(queue);
+
+    const addTitle=document.createElement('div');addTitle.className='section-title';addTitle.innerHTML='<span>Adicionar cadeira</span><span class="count-pill">ordem dos toques</span>';host.appendChild(addTitle);
+    const picker=document.createElement('div');picker.className='student-picker';
+    const available=room.seats.filter(s=>!queueInfo(room,s.id));
+    if(!available.length)picker.innerHTML='<div class="empty-state">Todas as cadeiras já estão na fila ou no banheiro.</div>';
+    else available.forEach(seat=>{
+      const chairNumber=room.seats.indexOf(seat)+1;
+      const row=document.createElement('button');row.type='button';row.className='student-row';
+      const optionalName=seat.name.trim()?` • ${esc(seat.name.trim())}`:'';
+      row.innerHTML=`<div class="avatar wc">${chairNumber}</div><div class="row-main"><b>Cadeira ${chairNumber}</b><small>${esc(seat.className)}${optionalName}</small></div><div class="row-action">＋</div>`;
+      row.addEventListener('click',()=>{
+        room.bathroom.queue.push({seatId:seat.id,addedAt:Date.now()});
+        save();render();renderBathroom();
+        if(navigator.vibrate)navigator.vibrate(10);
+      });
+      picker.appendChild(row);
+    });
+    host.appendChild(picker);
+  }
+
+  function openSearch(){$('#searchInput').value='';renderSearch('');searchBg.classList.add('show');setTimeout(()=>$('#searchInput').focus(),70)}
+  function closeSearch(){searchBg.classList.remove('show')}
+  function renderSearch(query){
+    const room=getRoom(),q=query.trim().toLocaleLowerCase('pt-BR');
+    const results=room.seats.filter(s=>s.name.trim()&&(s.name.toLocaleLowerCase('pt-BR').includes(q)||s.className.toLocaleLowerCase('pt-BR').includes(q))).slice(0,40);
+    const host=$('#searchResults');host.innerHTML='';
+    if(!results.length){host.innerHTML='<div class="empty-state">Nenhum aluno encontrado.</div>';return}
+    results.forEach(seat=>{
+      const idx=room.seats.indexOf(seat)+1,row=document.createElement('button');row.type='button';row.className='result-row';
+      const initials=seat.name.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
+      row.innerHTML=`<div class="avatar">${esc(initials||'?')}</div><div class="row-main"><b>${esc(seat.name)}</b><small>${esc(seat.className)} • cadeira ${idx}</small></div><div class="row-action">→</div>`;
+      row.addEventListener('click',()=>{closeSearch();centerOnSeat(seat.id,true)});host.appendChild(row);
+    });
+  }
+
+  function exportData(){
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=`mapa-de-sala-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove();closeMenu();showToast('Backup exportado');
+  }
+  function importData(file){
+    const reader=new FileReader();
+    reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.rooms)||!data.rooms.length)throw new Error();state=normalizeState(data);activeRoomId=data.activeRoomId||data.rooms[0].id;zoom=Number.isFinite(Number(data.zoom))?Number(data.zoom):1;closeMenu();save();render();requestAnimationFrame(()=>fitRoom(false));showToast('Backup importado')}catch(e){alert('Este arquivo não parece ser um backup válido.')}};
+    reader.readAsText(file);
+  }
+
+  function ask(title,text,value='',ok='Salvar'){
+    $('#promptTitle').textContent=title;$('#promptText').textContent=text;$('#promptInput').value=value;$('#promptOk').textContent=ok;promptBg.classList.add('show');
+    setTimeout(()=>{$('#promptInput').focus();$('#promptInput').select()},60);return new Promise(resolve=>promptResolve=resolve);
+  }
+  function finishPrompt(value){promptBg.classList.remove('show');const r=promptResolve;promptResolve=null;if(r)r(value)}
+  function openMenu(){menuBg.classList.add('show')}
+  function closeMenu(){menuBg.classList.remove('show')}
+  function showToast(text,actionLabel=null,action=null){
+    $('#toastText').textContent=text;const btn=$('#toastAction');undoAction=action||null;
+    if(actionLabel&&action){btn.hidden=false;btn.textContent=actionLabel}else btn.hidden=true;
+    $('#toast').classList.add('show');clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>{$('#toast').classList.remove('show');undoAction=null},action?3500:1700);
+  }
+
+  $('#toastAction').addEventListener('click',()=>{const fn=undoAction;undoAction=null;$('#toast').classList.remove('show');if(fn)fn()});
+  $('#roomHeading').addEventListener('click',()=>fitRoom(true));
+  $('#centerBtn').addEventListener('click',()=>fitRoom(true));
+  $('#zoomOut').addEventListener('click',()=>setZoom(zoom-.1));
+  $('#zoomIn').addEventListener('click',()=>setZoom(zoom+.1));
+  $('#bathroomBtn').addEventListener('click',openBathroom);
+  $('#focusWc').addEventListener('click',openBathroom);
+  $('#focusBtn').addEventListener('click',()=>toggleFocus(true));
+  $('#focusExit').addEventListener('click',()=>toggleFocus(false));
+  $('#addSeatBtn').addEventListener('click',addSeat);
+  $('#searchBtn').addEventListener('click',openSearch);
+  $('#menuBtn').addEventListener('click',openMenu);
+
+  $('#saveEdit').addEventListener('click',saveEdit);
+  $('#cancelEdit').addEventListener('click',closeEdit);
+  $('#deleteSeatBtn').addEventListener('click',deleteSeat);
+  $('#removeWarningBtn').addEventListener('click',()=>{editWarningDraft=Math.max(0,editWarningDraft-1);updateWarningEditor()});
+  $('#clearWarningsBtn').addEventListener('click',()=>{editWarningDraft=0;updateWarningEditor()});
+  $('#editBathroomBtn').addEventListener('click',()=>{
+    const id=editingSeatId,seat=getRoom().seats.find(s=>s.id===id);if(!seat)return;
+    seat.name=$('#studentInput').value.trim();seat.className=$('#classInput').value.trim()||'X°';seat.warnings=editWarningDraft;save();closeEdit();addToBathroomQueue(id,false);openBathroom();
+  });
+  $('#studentInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#classInput').focus()});
+  $('#classInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveEdit()});
+
+  $('#closeBathroom').addEventListener('click',closeBathroom);
+  $('#closeSearch').addEventListener('click',closeSearch);
+  $('#searchInput').addEventListener('input',e=>renderSearch(e.target.value));
+
+  $('#promptOk').addEventListener('click',()=>finishPrompt($('#promptInput').value.trim()||null));
+  $('#promptCancel').addEventListener('click',()=>finishPrompt(null));
+  $('#promptInput').addEventListener('keydown',e=>{if(e.key==='Enter')finishPrompt(e.target.value.trim()||null)});
+
+  $('#closeMenu').addEventListener('click',closeMenu);
+  $('#renameRoom').addEventListener('click',renameRoom);
+  $('#resetPositions').addEventListener('click',organize5x6);
+  $('#clearRoom').addEventListener('click',clearRoom);
+  $('#deleteRoom').addEventListener('click',deleteRoom);
+  $('#exportData').addEventListener('click',exportData);
+  $('#importData').addEventListener('click',()=>$('#importFile').click());
+  $('#importFile').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)importData(f);e.target.value=''});
+
+  [editBg,bathroomBg,searchBg,promptBg,menuBg].forEach(bg=>{
+    bg.addEventListener('pointerdown',e=>{
+      if(e.target!==bg)return;
+      if(bg===editBg)closeEdit();else if(bg===bathroomBg)closeBathroom();else if(bg===searchBg)closeSearch();else if(bg===promptBg)finishPrompt(null);else if(bg===menuBg)closeMenu();
+    });
+  });
+
+  viewport.addEventListener('touchstart',e=>{
+    if(e.touches.length!==2)return;
+    const a=e.touches[0],b=e.touches[1],dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),midX=(a.clientX+b.clientX)/2,midY=(a.clientY+b.clientY)/2,rect=viewport.getBoundingClientRect();
+    pinch={startDist:dist,startZoom:zoom,logicalX:(viewport.scrollLeft+(midX-rect.left))/zoom,logicalY:(viewport.scrollTop+(midY-rect.top))/zoom,midX:midX-rect.left,midY:midY-rect.top};
+  },{passive:true});
+  viewport.addEventListener('touchmove',e=>{
+    if(!pinch||e.touches.length!==2)return;
+    const a=e.touches[0],b=e.touches[1],dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    zoom=clamp(pinch.startZoom*(dist/pinch.startDist),MIN_ZOOM,MAX_ZOOM);updateScale(false);viewport.scrollLeft=pinch.logicalX*zoom-pinch.midX;viewport.scrollTop=pinch.logicalY*zoom-pinch.midY;e.preventDefault();
+  },{passive:false});
+  viewport.addEventListener('touchend',e=>{if(e.touches.length<2)pinch=null},{passive:true});
+
+  let resizeTimer;
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>fitRoom(false),140)});
+
+  setInterval(updateBathroomClock,1000);
+
+  if(state.focusMode)app.classList.add('focus-mode');
+  render();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>fitRoom(false)));
+  updateBathroomClock();
+})();
+</script>
+</body>
+</html>
